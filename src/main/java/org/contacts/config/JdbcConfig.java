@@ -40,10 +40,12 @@ public class JdbcConfig {
         dataSource.setPassword(jdbcPassword);
         return dataSource;
     }
+    @Bean
     public JdbcTemplate jdbcTemplate(){
         return new JdbcTemplate(dataSource());
     }
 
+    @Bean
     public NamedParameterJdbcTemplate namedParameterJdbcTemplate(){
         return new NamedParameterJdbcTemplate(dataSource());
     }
