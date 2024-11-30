@@ -13,8 +13,7 @@ public class Main {
         var applicationContext = new AnnotationConfigApplicationContext(ApplicationConfiguration.class);
         var contactDao = applicationContext.getBean(ContactDao.class);
 
-        Optional<Contact> contact = contactDao.getContact(1L);
-        System.out.println(contact);
+        contactDao.addContact("", "", "");
 
 
 

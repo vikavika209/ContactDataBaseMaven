@@ -1,6 +1,8 @@
 package org.contacts;
 
 import org.contacts.model.Contact;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -44,6 +46,10 @@ public class NamedJdbcContactDao implements ContactDao {
             "EMAIL " +
             "FROM CONTACTS";
 
+    private static final String DELETE_CONTACT = "" +
+            "DELETE FROM CONTACTS " +
+            "WHERE ID = :id";
+
     private static final RowMapper<Contact> CONTACT_ROW_MAPPER =
             (rs, rowNum) -> new Contact(
                     (long) rs.getInt("ID"),
@@ -56,6 +62,7 @@ public class NamedJdbcContactDao implements ContactDao {
     public NamedJdbcContactDao(NamedParameterJdbcTemplate namedParameterJdbcTemplate) {
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
     }
+    private static final Logger logger = LoggerFactory.getLogger(NamedJdbcContactDao.class);
 
     @Override
     public Optional<Contact> getContact(long id) {
@@ -78,8 +85,18 @@ public class NamedJdbcContactDao implements ContactDao {
 
     @Override
     public Contact addContact(String name, String phoneNumber, String email) {
-        try {
 
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Name cannot be empty or blank");
+        }
+        if (phoneNumber == null || phoneNumber.trim().isEmpty()) {
+            throw new IllegalArgumentException("Phone number cannot be empty or blank");
+        }
+        if (email == null || email.trim().isEmpty()) {
+            throw new IllegalArgumentException("Email cannot be empty or blank");
+        }
+
+        try {
             MapSqlParameterSource parameters = new MapSqlParameterSource();
             parameters.addValue("name", name);
             parameters.addValue("phone_number", phoneNumber);
@@ -92,40 +109,53 @@ public class NamedJdbcContactDao implements ContactDao {
             return new Contact(contactId, name, phoneNumber, email);
 
         } catch (DataAccessException e) {
-            System.err.println("Error adding contact: " + e.getMessage());
+            logger.error("Error adding contact: ", e);
             throw new RuntimeException("Failed to add contact", e);
         }
     }
 
     @Override
     public Contact updateContact(long id, String param) {
-        Map<Long, Contact> contactMap = getAllContacts();
 
-        if (isEmail(param)) {
-            Contact contact = new Contact(id, contactMap.get(id).getName(), contactMap.get(id).getPhoneNumber(), param);
-            contactMap.put(id, contact);
-            MapSqlParameterSource parameters = new MapSqlParameterSource();
-            parameters.addValue("name", contact.getName());
-            parameters.addValue("phone_number", contact.getPhoneNumber());
-            parameters.addValue("email", param);
-            parameters.addValue("id", id);
-            namedParameterJdbcTemplate.update(UPDATE_CONTACT_SQL,parameters);
-            return contact;
+        if (param == null) {
+            throw new IllegalArgumentException("The argument cannot be empty or blank");
         }
 
-        else if (isPhoneNumber(param)) {
-            Contact contact = new Contact(id, contactMap.get(id).getName(), param, contactMap.get(id).getEmail());
-            contactMap.put(id, contact);
-            MapSqlParameterSource parameters = new MapSqlParameterSource();
-            parameters.addValue("name", contact.getName());
-            parameters.addValue("phone_number", param);
-            parameters.addValue("email", contact.getEmail());
-            parameters.addValue("id", id);
-            namedParameterJdbcTemplate.update(UPDATE_CONTACT_SQL,parameters);
-            return contact;
-        }
-        else throw new IllegalArgumentException("The input string can't be read " + param);
+            try {
+                Contact contactToUpdate = namedParameterJdbcTemplate.queryForObject(GET_CONTACT_SQL,
+                        new MapSqlParameterSource().addValue("id", id), CONTACT_ROW_MAPPER);
 
+            if (isEmail(param)) {
+                    MapSqlParameterSource parameters = new MapSqlParameterSource();
+                    parameters.addValue("name", contactToUpdate.getName());
+                    parameters.addValue("phone_number", contactToUpdate.getPhoneNumber());
+                    parameters.addValue("email", param);
+                    parameters.addValue("id", id);
+                    namedParameterJdbcTemplate.update(UPDATE_CONTACT_SQL, parameters);
+                    return contactToUpdate;
+                } else if (isPhoneNumber(param)) {
+                    MapSqlParameterSource parameters = new MapSqlParameterSource();
+                    parameters.addValue("name", contactToUpdate.getName());
+                    parameters.addValue("phone_number", param);
+                    parameters.addValue("email", contactToUpdate.getEmail());
+                    parameters.addValue("id", id);
+                    namedParameterJdbcTemplate.update(UPDATE_CONTACT_SQL, parameters);
+                    return contactToUpdate;
+                }
+            } catch (NoSuchElementException e){
+                logger.error("Contact with ID {} not found.", id,e);
+            } throw new IllegalArgumentException("The input string can't be read " + param);
+        }
+
+    @Override
+    public boolean deleteContact(long id) {
+        try {
+        namedParameterJdbcTemplate.update(DELETE_CONTACT,
+                new MapSqlParameterSource().addValue("id", id));
+        return true;
+        }catch (EmptyResultDataAccessException e){
+            return false;
+        }
     }
 
     private boolean isPhoneNumber(String line){

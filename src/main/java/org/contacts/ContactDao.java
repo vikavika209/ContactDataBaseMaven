@@ -9,5 +9,5 @@ public interface ContactDao {
     Map<Long, Contact> getAllContacts();
     Contact addContact(String name, String phoneNumber, String email);
     Contact updateContact(long id, String param);
-
+    boolean deleteContact(long id);
 }
